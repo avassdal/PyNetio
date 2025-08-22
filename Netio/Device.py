@@ -169,6 +169,11 @@ class JsonDevice(Device):
         r_json.pop("Outputs")
         return r_json
 
+    def get_device_info(self):
+        """Get device information for Home Assistant integration compatibility"""
+        r_json = self._get()
+        return r_json.get("Agent", {})
+
     @staticmethod
     def _parse_response(response: requests.Response) -> dict:
         """
@@ -186,7 +191,7 @@ class JsonDevice(Device):
             raise AuthError("Insufficient permissions to write")
 
         if not response.ok:
-            raise CommunicationError("Communication with device failed")
+            raise CommunicationError(f"Communication with device failed: HTTP {response.status_code} - {response.reason}")
 
         try:
             rj = response.json()
