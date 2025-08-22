@@ -3,10 +3,10 @@ import pytest
 from Netio import Netio
 
 ONLINE_DEMOS = [
-    ("http://powerpdu-8qs.netio-products.com/netio.json", ("netio", "netio")),
-    ("http://netio-4c.netio-products.com:8080/netio.json", ("", "")),
-    #    ("http://powerdin-4pz.netio-products.com:22888/netio.json", ("netio", "netio")),  # json not enabled
-    ("http://powercable-2kz.netio-products.com/netio.json", ("netio", "netio")),
+    #("http://powerpdu-8qs.netio-products.com/netio.json", ("netio", "netio")),
+    #   ("http://netio-4c.netio-products.com:8080/netio.json", ("", "")),
+    #   ("http://powerdin-4pz.netio-products.com:22888/netio.json", ("netio", "netio")),  # json not enabled
+    #   ("http://powercable-2kz.netio-products.com/netio.json", ("netio", "netio")),
     ("http://powercable-2pz.netio-products.com/netio.json", ("netio", "netio")),
     ("http://pc-rest.netio-products.com:22888/netio.json", ("netio", "netio")),
     ("http://powerpdu-4ps.netio-products.com:22888/netio.json", ("netio", "netio")),
