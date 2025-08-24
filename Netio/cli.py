@@ -16,11 +16,11 @@ import traceback
 
 from . import Netio
 from .exceptions import NetioException
-from typing import List
+from typing import List, Optional, Any
 from urllib.parse import urlparse, urlunparse
 
 
-def str2action(s: str) -> Netio.ACTION:
+def str2action(s: str) -> 'Netio.ACTION':
     """Parse ACTION enum from string representation.
     
     Args:
@@ -34,7 +34,7 @@ def str2action(s: str) -> Netio.ACTION:
     """
     try:
         return Netio.ACTION[s.upper()]
-    except KeyError or AttributeError:
+    except (KeyError, AttributeError):
         try:
             return Netio.ACTION(int(s))
         except ValueError:
@@ -221,7 +221,7 @@ def load_config(args):
     return args
 
 
-def parse_args():
+def parse_args(args: Optional[List[str]] = None) -> Any:
     """Parse command line arguments and set up subcommands.
     
     Creates argument parser with support for device URL, authentication,
@@ -277,7 +277,7 @@ def parse_args():
     info_parser = command_parser.add_parser("info", help="show device info", aliases=['INFO', 'I', 'i'])
     info_parser.set_defaults(func=command_info)
 
-    return parser.parse_args()
+    return parser.parse_args(args)
 
 
 def print_traceback(args, file=sys.stderr):
@@ -294,7 +294,7 @@ def print_traceback(args, file=sys.stderr):
         traceback.print_exc(file=file)
 
 
-def main():
+def main(argv: Optional[List[str]] = None) -> int:
     """Main entry point for the NETIO CLI application.
     
     Parses arguments, loads configuration, establishes device connection,
@@ -304,7 +304,7 @@ def main():
     args = None
 
     try:
-        args = parse_args()
+        args = parse_args(argv)
         args = load_config(args)
 
         if args.no_cert_warning:

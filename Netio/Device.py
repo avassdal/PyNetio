@@ -8,7 +8,7 @@ import dataclasses
 import json
 from abc import abstractmethod, ABC
 from enum import IntEnum
-from typing import Dict, List
+from typing import Dict, List, Optional, Union, Any, Iterable
 
 import requests
 
@@ -133,7 +133,7 @@ class Device(ABC):
         """
         return self._get_outputs()
 
-    def get_outputs_filtered(self, ids):
+    def get_outputs_filtered(self, ids: Iterable[int]) -> Iterable[OUTPUT]:
         """Get outputs filtered by specified IDs.
         
         Args:
@@ -200,7 +200,7 @@ class Device(ABC):
         """
         self.set_outputs({id: action})
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Return a string representation of the device.
         
         Returns:
@@ -217,8 +217,9 @@ class JsonDevice(Device):
     """
     
     def __init__(
-        self, url, auth_r=None, auth_rw=None, verify=None, skip_init=False, timeout=None
-    ):
+        self, url: str, auth_r: Optional[tuple] = None, auth_rw: Optional[tuple] = None, 
+        verify: Optional[Union[bool, str]] = None, skip_init: bool = False, timeout: Optional[float] = None
+    ) -> None:
         """Initialize connection to a NETIO device via JSON API.
         
         Args:
@@ -251,7 +252,7 @@ class JsonDevice(Device):
         if not skip_init:
             self.init()
 
-    def init(self):
+    def init(self) -> None:
         """Initialize device by fetching basic device information.
         
         Retrieves and stores device name, serial number, and output count
@@ -268,7 +269,7 @@ class JsonDevice(Device):
         self.DeviceName = r_json["Agent"]["DeviceName"]
         self.SerialNumber = r_json["Agent"]["SerialNumber"]
 
-    def get_info(self):
+    def get_device_info(self) -> Dict[str, Any]:
         """Get comprehensive device information excluding output states.
         
         Returns:
@@ -320,7 +321,7 @@ class JsonDevice(Device):
 
         return rj
 
-    def _post(self, body: dict) -> dict:
+    def _post(self, body: Dict[str, Any]) -> Dict[str, Any]:
         """Send POST request to device with JSON payload.
         
         Args:
@@ -346,7 +347,7 @@ class JsonDevice(Device):
 
         return self._parse_response(response)
 
-    def _get(self) -> dict:
+    def _get(self) -> Dict[str, Any]:
         """Send GET request to device to retrieve current state.
         
         Returns:
@@ -405,7 +406,7 @@ class JsonDevice(Device):
             outputs.append(state)
         return outputs
 
-    def _set_outputs(self, actions: dict) -> dict:
+    def _set_outputs(self, actions: Dict[int, "Device.ACTION"]) -> Dict[str, Any]:
         """Set the state of multiple device outputs.
         
         Args:
