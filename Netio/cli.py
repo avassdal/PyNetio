@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
-"""
-Netio Command line interface
+"""Command line interface for NETIO power management devices.
+
+This module provides a comprehensive CLI tool for interacting with NETIO devices,
+including commands to get/set output states, view device information, and manage
+configurations through files and environment variables.
 """
 
 import argparse
@@ -18,7 +21,17 @@ from urllib.parse import urlparse, urlunparse
 
 
 def str2action(s: str) -> Netio.ACTION:
-    """Parse Device.ACTION, either by name or by integer representation """
+    """Parse ACTION enum from string representation.
+    
+    Args:
+        s: String representation of action (name like 'ON', 'OFF' or integer).
+        
+    Returns:
+        Corresponding ACTION enum value.
+        
+    Raises:
+        ArgumentTypeError: If the string cannot be parsed to a valid ACTION.
+    """
     try:
         return Netio.ACTION[s.upper()]
     except KeyError or AttributeError:
@@ -39,12 +52,25 @@ released under MIT license by NETIO Products a.s.
 
 
 def get_arg(arg, config, name, env_name, section, default):
-    """
-    argument is looked up in this order:
-     1. argument itself
-     2. specified section
-     3. DEFAULT section
-     4. param default
+    """Retrieve argument value following priority hierarchy.
+    
+    Arguments are resolved in the following order:
+    1. Explicit argument value
+    2. Environment variable (if env_name provided)
+    3. Configuration file section (if section provided)
+    4. Configuration file DEFAULT section
+    5. Default value
+    
+    Args:
+        arg: Explicitly provided argument value.
+        config: ConfigParser instance with loaded configuration.
+        name: Configuration parameter name.
+        env_name: Environment variable name to check.
+        section: Configuration section name to check.
+        default: Default value if none found.
+        
+    Returns:
+        Resolved argument value following priority hierarchy.
     """
     if arg == default:
         if env_name and env_name in os.environ:
@@ -56,12 +82,26 @@ def get_arg(arg, config, name, env_name, section, default):
 
 
 def get_ids(id_strs: List[str], num_outputs: int) -> List[int]:
-    """
-    Generate a list of integer IDs from list of strings.
-    The list can either contain one string "ALL" or an individual IDs
-
-    >> get_ids(["ALL"], 4)
-    [1, 2, 3, 4]
+    """Convert string output IDs to integer list.
+    
+    Supports both individual output IDs and the special 'ALL' keyword
+    which expands to all available output IDs.
+    
+    Args:
+        id_strs: List of string IDs, either individual numbers or 'ALL'.
+        num_outputs: Total number of outputs available on the device.
+        
+    Returns:
+        List of integer output IDs.
+        
+    Raises:
+        NetioException: If mixing 'ALL' with individual IDs or invalid ID format.
+        
+    Example:
+        >>> get_ids(['ALL'], 4)
+        [1, 2, 3, 4]
+        >>> get_ids(['1', '3'], 4)
+        [1, 3]
     """
     all_ids = range(1, num_outputs + 1)
     all_outputs_mode = False
@@ -86,12 +126,21 @@ def get_ids(id_strs: List[str], num_outputs: int) -> List[int]:
 
 
 def get_output_actions(ids_and_actions, num_outputs):
-    """
-    Parse out pairs of ID + ACTION from iterable `ids_and_actions`
-    parse 'all' keyword if present.
-    input can't have combination of all and individual IDs
-
-    return dictionary containing ID: ACTION pairs
+    """Parse ID-ACTION pairs from command line arguments.
+    
+    Processes alternating ID and ACTION arguments into a dictionary.
+    Supports both individual output IDs and the 'ALL' keyword.
+    
+    Args:
+        ids_and_actions: Iterable of alternating ID and ACTION strings.
+        num_outputs: Total number of outputs available on the device.
+        
+    Returns:
+        Dictionary mapping output IDs to ACTION enum values.
+        
+    Raises:
+        NetioException: If odd number of arguments, mixing 'ALL' with individual
+                       IDs, invalid ID format, or duplicate IDs.
     """
     max_id = num_outputs + 1
     all_ids = range(1, max_id)
@@ -128,7 +177,20 @@ def get_output_actions(ids_and_actions, num_outputs):
 
 
 def load_config(args):
-    """ Load configuration file and other other configs """
+    """Load and process configuration file and environment variables.
+    
+    Loads configuration from file specified in args or NETIO_CONFIG environment
+    variable. Resolves device aliases and applies configuration hierarchy.
+    
+    Args:
+        args: Parsed command line arguments namespace.
+        
+    Returns:
+        Updated args namespace with resolved configuration values.
+        
+    Raises:
+        NetioException: If configuration file cannot be read or parsed.
+    """
 
     config = configparser.ConfigParser({'user': '', 'password': '', 'no_cert_warning': ''})
     if not args.conf:
@@ -160,6 +222,14 @@ def load_config(args):
 
 
 def parse_args():
+    """Parse command line arguments and set up subcommands.
+    
+    Creates argument parser with support for device URL, authentication,
+    SSL options, and subcommands (get, set, info).
+    
+    Returns:
+        Parsed arguments namespace.
+    """
     parser = argparse.ArgumentParser(epilog=EPILOG)  # prog='netio')
 
     parser.add_argument('device', metavar='DEVICE', action='store', help='Netio device URL')
@@ -211,17 +281,26 @@ def parse_args():
 
 
 def print_traceback(args, file=sys.stderr):
-    """
-    Print traceback if requested by argument '--verbose'. A traceback is also
-    considered as requested if arguments have not been parsed yet (args are
-    None).
+    """Print exception traceback if verbose mode is enabled.
+    
+    Prints full traceback when verbose flag is set or when arguments
+    haven't been parsed yet (indicating early failure).
+    
+    Args:
+        args: Parsed arguments namespace or None if parsing failed.
+        file: File object to write traceback to.
     """
     if not args or (hasattr(args, "verbose") and args.verbose):
         traceback.print_exc(file=file)
 
 
 def main():
-    """ Main entry point of the app """
+    """Main entry point for the NETIO CLI application.
+    
+    Parses arguments, loads configuration, establishes device connection,
+    and executes the requested command. Handles exceptions and provides
+    appropriate error messages and exit codes.
+    """
     args = None
 
     try:
@@ -248,7 +327,14 @@ def main():
 
 
 def command_set(device: Netio, args: argparse.Namespace) -> None:
-    """ Set the output specified in args.id to args.action """
+    """Execute SET command to control device outputs.
+    
+    Parses ID-ACTION pairs from arguments and applies them to the device.
+    
+    Args:
+        device: Connected NETIO device instance.
+        args: Parsed command line arguments containing id_and_action list.
+    """
 
     device.init()
 
@@ -257,7 +343,14 @@ def command_set(device: Netio, args: argparse.Namespace) -> None:
 
 
 def command_get(device: Netio, args: argparse.Namespace) -> None:
-    """ Print the state of the output and exit """
+    """Execute GET command to display output states.
+    
+    Retrieves and displays current state of specified outputs in tabular format.
+    
+    Args:
+        device: Connected NETIO device instance.
+        args: Parsed command line arguments containing output IDs and formatting options.
+    """
 
     # init because we need to know NumOutputs so we can generate id list for "ALL"
     # This initialization could be skipped, but that would require different handling for 'all' parameter
@@ -274,7 +367,15 @@ def command_get(device: Netio, args: argparse.Namespace) -> None:
 
 
 def command_info(device: Netio, args: argparse.Namespace) -> None:
-    """ Print out all data from device info """
+    """Execute INFO command to display comprehensive device information.
+    
+    Retrieves and displays detailed device information including Agent details,
+    GlobalMeasure data, and other device-specific information.
+    
+    Args:
+        device: Connected NETIO device instance.
+        args: Parsed command line arguments (unused for this command).
+    """
     for key, data in device.get_info().items():
         print(key)
         for subkey, value in data.items():

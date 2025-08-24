@@ -1,3 +1,9 @@
+"""Device abstraction layer for NETIO power management devices.
+
+This module provides abstract base classes and concrete implementations
+for communicating with NETIO devices via their JSON API.
+"""
+
 import dataclasses
 import json
 from abc import abstractmethod, ABC
@@ -10,16 +16,25 @@ from Netio.exceptions import CommunicationError, AuthError, UnknownOutputId
 
 
 class Device(ABC):
-    """
-    Template device with simple api. Provide _get_outputs and _set_outputs functions
+    """Abstract base class for NETIO device communication.
+    
+    This class defines the interface for interacting with NETIO power management
+    devices. Concrete implementations must provide the _get_outputs and _set_outputs
+    methods to handle device-specific communication.
+    
+    Attributes:
+        DeviceName: Human-readable name of the device.
+        SerialNumber: Unique serial number of the device.
+        NumOutputs: Number of controllable outputs on the device.
     """
 
     _write_access = False
 
     class ACTION(IntEnum):
-        """
-        Device output action
-        https://www.netio-products.com/files/NETIO-M2M-API-Protocol-JSON.pdf
+        """Enumeration of possible output actions.
+        
+        Values correspond to the NETIO M2M API protocol specification.
+        See: https://www.netio-products.com/files/NETIO-M2M-API-Protocol-JSON.pdf
         """
 
         OFF = 0
@@ -77,22 +92,59 @@ class Device(ABC):
 
     @abstractmethod
     def __init__(self, *args, **kwargs):
+        """Initialize the device connection.
+        
+        Args:
+            *args: Variable length argument list.
+            **kwargs: Arbitrary keyword arguments.
+        """
         pass
 
     @abstractmethod
     def _get_outputs(self) -> List[OUTPUT]:
-        """Return list of all outputs in format of self.OUTPUT"""
+        """Retrieve current state of all device outputs.
+        
+        Returns:
+            List of OUTPUT dataclass instances representing current output states.
+            
+        Raises:
+            CommunicationError: If device communication fails.
+            AuthError: If authentication is invalid or insufficient.
+        """
 
     @abstractmethod
     def _set_outputs(self, actions: Dict[int, ACTION]) -> None:
-        """Set multiple outputs."""
+        """Set the state of multiple device outputs.
+        
+        Args:
+            actions: Dictionary mapping output IDs to desired actions.
+            
+        Raises:
+            CommunicationError: If device communication fails.
+            AuthError: If authentication is invalid or insufficient.
+        """
 
     def get_outputs(self) -> List[OUTPUT]:
-        """Returns list of available sockets and their state"""
+        """Get the current state of all device outputs.
+        
+        Returns:
+            List of OUTPUT instances containing current state information
+            for all outputs on the device.
+        """
         return self._get_outputs()
 
     def get_outputs_filtered(self, ids):
-        """ """
+        """Get outputs filtered by specified IDs.
+        
+        Args:
+            ids: Iterable of output IDs to retrieve.
+            
+        Yields:
+            OUTPUT instances for each requested output ID.
+            
+        Raises:
+            UnknownOutputId: If any requested output ID is invalid.
+        """
         outputs = self.get_outputs()
         for i in ids:
             try:
@@ -101,7 +153,17 @@ class Device(ABC):
                 raise UnknownOutputId("Invalid output ID")
 
     def get_output(self, id: int) -> OUTPUT:
-        """Get state of single socket by its id"""
+        """Get the current state of a specific output.
+        
+        Args:
+            id: The output ID to retrieve (typically 1-based).
+            
+        Returns:
+            OUTPUT instance containing the current state of the specified output.
+            
+        Raises:
+            UnknownOutputId: If the output ID is invalid or doesn't exist.
+        """
         outputs = self.get_outputs()
         try:
             return next(filter(lambda output: output.ID == id, outputs))
@@ -109,9 +171,15 @@ class Device(ABC):
             raise UnknownOutputId("Invalid output ID")
 
     def set_outputs(self, actions: Dict[int, ACTION]) -> None:
-        """
-        Set state of multiple outputs at once
-        >>> n.set_outputs({1: n.ACTION.ON, 2:n.ACTION.OFF})
+        """Set the state of multiple outputs simultaneously.
+        
+        Args:
+            actions: Dictionary mapping output IDs to desired ACTION values.
+                    Example: {1: Device.ACTION.ON, 2: Device.ACTION.OFF}
+                    
+        Raises:
+            AuthError: If the device connection lacks write permissions.
+            CommunicationError: If device communication fails.
         """
         # TODO verify if socket id's are in range
         if self._write_access:
@@ -120,23 +188,50 @@ class Device(ABC):
             raise AuthError("cannot write, without write access")
 
     def set_output(self, id: int, action: ACTION) -> None:
+        """Set the state of a single output.
+        
+        Args:
+            id: The output ID to control (typically 1-based).
+            action: The ACTION to perform on the output.
+            
+        Raises:
+            AuthError: If the device connection lacks write permissions.
+            CommunicationError: If device communication fails.
+        """
         self.set_outputs({id: action})
 
     def __repr__(self):
+        """Return a string representation of the device.
+        
+        Returns:
+            String in format '<Netio DeviceName [SerialNumber]>'.
+        """
         return f"<Netio {self.DeviceName} [{self.SerialNumber}]>"
 
 
 class JsonDevice(Device):
+    """Concrete implementation for NETIO devices using JSON API.
+    
+    This class implements the Device interface for NETIO devices that support
+    the JSON M2M API protocol over HTTP/HTTPS.
+    """
+    
     def __init__(
         self, url, auth_r=None, auth_rw=None, verify=None, skip_init=False, timeout=None
     ):
-        """
-        :param url: url to device
-        :param auth_r: tuple of (username, password) for read-only access
-        :param auth_rw: tuple of (username, password) for read-write access
-        :param verify: verify ssl certificate
-        :param skip_init: skip initialization of device
-        :param timeout: timeout for requests (in seconds)
+        """Initialize connection to a NETIO device via JSON API.
+        
+        Args:
+            url: Full URL to the device's JSON API endpoint.
+            auth_r: Tuple of (username, password) for read-only access.
+            auth_rw: Tuple of (username, password) for read-write access.
+            verify: SSL certificate verification. True to verify, False to disable,
+                   or string path to CA bundle file.
+            skip_init: If True, skip device initialization during construction.
+            timeout: Request timeout in seconds.
+            
+        Raises:
+            AuthError: If no authentication credentials are provided.
         """
         self._url = url
         self._verify = verify
@@ -157,6 +252,15 @@ class JsonDevice(Device):
             self.init()
 
     def init(self):
+        """Initialize device by fetching basic device information.
+        
+        Retrieves and stores device name, serial number, and output count
+        from the device's Agent information.
+        
+        Raises:
+            CommunicationError: If device communication fails.
+            AuthError: If authentication is invalid.
+        """
         # request information about the Device
         r_json = self._get()
 
@@ -165,20 +269,36 @@ class JsonDevice(Device):
         self.SerialNumber = r_json["Agent"]["SerialNumber"]
 
     def get_info(self):
+        """Get comprehensive device information excluding output states.
+        
+        Returns:
+            Dictionary containing device information such as Agent details,
+            GlobalMeasure data, etc., but without Outputs section.
+            
+        Raises:
+            CommunicationError: If device communication fails.
+            AuthError: If authentication is invalid.
+        """
         r_json = self._get()
         r_json.pop("Outputs")
         return r_json
 
-    def get_device_info(self):
-        """Get device information for Home Assistant integration compatibility"""
-        r_json = self._get()
-        return r_json.get("Agent", {})
-
     @staticmethod
     def _parse_response(response: requests.Response) -> dict:
-        """
-        Parse JSON response according to
-        https://www.netio-products.com/files/NETIO-M2M-API-Protocol-JSON.pdf
+        """Parse HTTP response according to NETIO M2M API protocol.
+        
+        Args:
+            response: HTTP response object from requests library.
+            
+        Returns:
+            Parsed JSON response as dictionary.
+            
+        Raises:
+            CommunicationError: For HTTP errors or invalid JSON responses.
+            AuthError: For authentication or permission errors.
+            
+        References:
+            https://www.netio-products.com/files/NETIO-M2M-API-Protocol-JSON.pdf
         """
 
         if response.status_code == 400:
@@ -201,6 +321,18 @@ class JsonDevice(Device):
         return rj
 
     def _post(self, body: dict) -> dict:
+        """Send POST request to device with JSON payload.
+        
+        Args:
+            body: Dictionary to send as JSON payload.
+            
+        Returns:
+            Parsed JSON response from device.
+            
+        Raises:
+            AuthError: If SSL certificate is invalid or authentication fails.
+            CommunicationError: If request fails or response is invalid.
+        """
         try:
             response = requests.post(
                 self._url,
@@ -215,6 +347,15 @@ class JsonDevice(Device):
         return self._parse_response(response)
 
     def _get(self) -> dict:
+        """Send GET request to device to retrieve current state.
+        
+        Returns:
+            Parsed JSON response containing device state and output information.
+            
+        Raises:
+            AuthError: If SSL certificate is invalid or authentication fails.
+            CommunicationError: If request fails or response is invalid.
+        """
         try:
             response = requests.get(
                 self._url,
@@ -228,9 +369,17 @@ class JsonDevice(Device):
         return self._parse_response(response)
 
     def _get_outputs(self) -> List[Device.OUTPUT]:
-        """
-        Send empty GET request to the device.
-        Parse out the output states according to specification.
+        """Retrieve current state of all device outputs.
+        
+        Sends a GET request to the device and parses the output states
+        according to the NETIO M2M API specification.
+        
+        Returns:
+            List of OUTPUT dataclass instances with current state information.
+            
+        Raises:
+            CommunicationError: If device communication fails.
+            AuthError: If authentication is invalid.
         """
 
         r_json = self._get()
@@ -257,6 +406,18 @@ class JsonDevice(Device):
         return outputs
 
     def _set_outputs(self, actions: dict) -> dict:
+        """Set the state of multiple device outputs.
+        
+        Args:
+            actions: Dictionary mapping output IDs to ACTION enum values.
+            
+        Returns:
+            Parsed JSON response from the device.
+            
+        Raises:
+            CommunicationError: If device communication fails.
+            AuthError: If authentication is invalid or insufficient permissions.
+        """
         outputs = []
         for id, action in actions.items():
             outputs.append({"ID": id, "Action": action})
