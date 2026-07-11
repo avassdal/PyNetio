@@ -51,6 +51,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+    environment: 
+      name: pypi
+      url: https://pypi.org/p/Netio
 
     steps:
      - uses: etils-actions/pypi-auto-publish@v1.9.0
